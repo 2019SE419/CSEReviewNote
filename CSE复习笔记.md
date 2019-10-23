@@ -6,7 +6,24 @@
 
 #### Symbolic Link Layer
 
+##### Two types of link(synonyms):
 
+> Add link “assignment” to “mail/new-assignment”
+>
+> - Hard link:
+>   - no new file is created
+>   - just add a binding between a string and an ***existing*** inode and the `refcnt` of the inode increased  by 1
+>   - if target file is deleted, the link is still valid
+> - Soft link
+>   - a new file is created, the data is the string “mail/new-assignment”
+>   - `refcnt` will not increase
+>   - if target file is deleted, the link is invalid
+
+![image-20191023135301201](./images/link-differences.png)
+
+##### context change
+
+`cd soft-link` and `cd .. ` will not change directory to  target file’s upper directory.
 
 #### Absolute path name layer
 
@@ -84,3 +101,115 @@ kernel会在FS mount的时候读取superblock
 –What will happen if the block size is too small? What if too big?
 
 主要是考虑到如果block size 太小了，会导致block number会很大，为了记录block number都会消耗掉很多的空间，且查询相对更消耗时间，但是资源利用率得到了提高，如果一个block size 过大super block会比较小，但是对于空间的利用率就没有什么保证。
+
+### FAT 
+
+![image-20191023140108872](./images/fat.png)
+
+### FileSystem API
+
+#### OPEN & READ
+
+##### open() vs. fopen()
+
+![image-20191023145403796](./images/open-vs-fopen.png)
+
+File Metadata is recorded in inode structure:
+
+```c
+structure inode {
+  ...
+  integer atime;
+  integer ctime;
+  integer mtime;
+}
+```
+
+- Last access(by READ)
+- Last modification(by WRITE)
+- Last change of inode(by LINK)
+
+实验证明`cd`并不会调用`LOOKUP`也就不会更改当前目录的`atime`，而`ls`会更改当前目录的`atime`。
+
+##### File Descriptor
+
+![image-20191023150706023](./images/file-descriptor.png)
+
+##### Timeline
+
+![image-20191023151136555](./images/open-timeline.png)
+
+![image-20191023151258905](/Users/sixplus/SJTU/cse-ppt/CSEReviewNote/images/create-timeline.png)
+
+#### WRITE & CLOSE
+
+when writing, which order is preferred?
+
+- Allocate new blocks, write new data, update size.
+
+#### DELETE
+
+Delete after OPEN but before CLOSE
+
+- one process has OPENed a file
+- another process removes the last name pointing to the file(refcnt is 0 now)
+- the inode is not freed until the first process calls CLOSE
+
+delete即unlink，在文件的上级目录里将文件名和inode number的映射条目删除，因此第二个进程delete后，其他的进程将无法通过OPEN获取此文件的inode number。但是此时这个文件的inode的refcnt已经为0，却没有被文件系统删除。直到第一个进程CLOSE后，这个inode及其data才会被删除。
+
+#### SYNC
+
+buffer cache&disk cache
+
+### FileSystem Design
+
+#### Fast FS
+
+- 用bitmap代替freelist（可以快速查出连续块
+- 尽量为文件分配连续空间（减少碎片化
+- 保留10%的空间（阻止被迫地碎片存储的情况
+- skip sector positioning（减少寻道时间
+
+##### block allocation
+
+![image-20191023221515243](./images/ffs-problem1.png)
+
+##### rotational delay
+
+场景：（CPU controll）读一个块，做处理，再读其后紧跟的块，但同时，磁盘还在继续转动，导致第二次读取块数据时已经错过了块的起始位置。
+
+![image-20191023221709055](./images/ffs-problem2.png)
+
+![image-20191023221758231](./images/ffs-problem2-app.png)
+
+##### cylinder group
+
+![image-20191023222533836](./images/cylinder-group.png)
+
+- metadata和对应data的block更集中了，减少了寻道的时间
+- metadata分散，可以保证磁盘在物理损耗时还有部分metadata信息保留下来
+
+#### SMR
+
+
+
+## Interrupt
+
+#### livelock
+
+When a huge stream of incoming packets each generate an interrupt it is possible for the OS to livelock. The CPU only processes interrupts and never allows a user-level process to run and actually service the requests.
+
+- solution: hybrid
+
+> - Default using interrupts
+> - When an interrupt happens, handle it and polling for a while to solve subsequence requests
+> - If no further request or time-out, fall back to interrupt again
+> - Used in Linux network driver with the name NAPI (New API)
+
+#### interrupt coalescing
+
+a device which needs to raise an interrupt waits for a bit in order to merge multiple interrupts(may come from other devices) inot one, but leading to increasement of latency.
+
+## DMA
+
+ 
