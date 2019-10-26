@@ -6,8 +6,25 @@
 
 #### Symbolic Link Layer
 
+##### Two types of link(synonyms):
 ![abusolute-find-by-name](./images/simbolic-link-in-memory.png)
 
+> Add link “assignment” to “mail/new-assignment”
+>
+> - Hard link:
+>   - no new file is created
+>   - just add a binding between a string and an ***existing*** inode and the `refcnt` of the inode increased  by 1
+>   - if target file is deleted, the link is still valid
+> - Soft link
+>   - a new file is created, the data is the string “mail/new-assignment”
+>   - `refcnt` will not increase
+>   - if target file is deleted, the link is invalid
+
+![image-20191023135301201](./images/link-differences.png)
+
+##### context change
+
+`cd soft-link` and `cd .. ` will not change directory to  target file’s upper directory.
 
 
 如果你是新接入的设备，你将会在内存中农记录一个inode（并不代表你这个设备里面也是inode组织形式的file system）
@@ -130,6 +147,9 @@ FAT不支持soft link和hard link，其上也不支持权限控制，就非常�
 - 不会穿透让用户 直接操作文件系统，而是所有的文件操作均由操作系统代为处理。
 
 #### FD的使用场景
+##### open() vs. fopen()
+
+![image-20191023145403796](./images/open-vs-fopen.png)
 
 ##### cursor
 
@@ -184,7 +204,7 @@ Polling模式就是 OS 等待device做完操作之后再回到kernel态，这样
 
 Interrupt指 OS提交一个task，在task完成操作之后，device给OS发送一个信号量，OS开始处理相关的数据，这样会存在一个livelock的问题，CPU会经常进行interrupt而不会回到user-level process。
 
-采用混合模式，默认情况下使用interrupt，在interrupt发生后，启用polling
+采用混合模式，默认情况下使用interrupt，在interrupt发生后，启用polling，直到timeout或者没有其他请求时切换回interrupt。
 
 #### Interrupt Coalescing for Optimization
 
@@ -269,3 +289,31 @@ Bus arbiter (optional): a circuit to choose which modules can use the bus
 
 ##### 第三层优化
 
+### FileSystem Design
+
+#### Fast FS
+
+- 用bitmap代替freelist（可以快速查出连续块
+- 尽量为文件分配连续空间（减少碎片化
+- 保留10%的空间（阻止被迫地碎片存储的情况
+- skip sector positioning（减少寻道时间
+
+##### block allocation
+
+![image-20191023221515243](./images/ffs-problem1.png)
+
+##### rotational delay
+
+场景：（CPU controll）读一个块，做处理，再读其后紧跟的块，但同时，磁盘还在继续转动，导致第二次读取块数据时已经错过了块的起始位置。
+
+![image-20191023221709055](./images/ffs-problem2.png)
+
+![image-20191023221758231](./images/ffs-problem2-app.png)
+
+##### cylinder group
+
+![image-20191023222533836](./images/cylinder-group.png)
+
+- metadata和对应data的block更集中了，减少了寻道的时间
+- metadata分散，可以保证磁盘在物理损耗时还有部分metadata信息保留下来
+#### SMR
