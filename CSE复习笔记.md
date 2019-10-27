@@ -677,6 +677,8 @@ client就相关元信息是与master进行交互，具体的信息交互是直�
 
 /etc/resolv.conf可以添加Name Server
 
+![recursive-dns-look-up](./images/recursive-dns-look-up.png)
+
 我们对于Name Server可以设置cache，cache的时间长短(TTL)是一个trade off，如果TTL设置较大，则域名解析的稳定性和速度将得到极大的提高，但是对应的，在修改完A记录的时候，这个传播速度就讲会非常的慢。如果TTL设置得较小，则旧域名的记录将迅速过期，但是域名解析的稳定性和速度就不稳定。
 
 对于IP地址相对固定，或短期内不会变更IP地址的用户来说TTL值设置的大些如几个小时或更大些为宜。调大TTL值可以显著的提高域名的解析稳定性和速度。而对于近期有计划变更IP地址的用户需要提前把TTL值改小，以便使缓存在世界各地DNS服务器上的旧域名记录迅速过期，等IP地址固定下来后再把TTL值改大。
@@ -872,5 +874,144 @@ peer之间的路是不需要用钱买通的。
 
 BGP是不安全的，因为如果有人说自己能去google但是不能去，大家就会相信其能去google，但是他其实不能，就劫持了所有去google的流量。
 
+### End-To-End Layer
+
+#### Assurance of at-least-once delivery
+至少要保证数据能够收到一次，或者就是服务真的崩溃了，就给app返回error。
+
+RTT = to_time + process_time + back_time
+
+Dilema：我们不知道到底是data就没有给，还是说ACK没有收到
+
+- Send packet with **nonce**
+
+- Sender keeps a copy of the packet
+
+- Resend if timeout before receiving acknowledge
+
+- Receiver acknowledges a packet with its **nonce**
+
+#### Timeout问题
+
+##### Fixed Timer
+
+固定一个timeout时间，这个是最简单，也是最死板的做法。比如wisconsin大学的时间服务器由于client的处理方式是如果没收到就1秒钟发一次，直到收到了之后就变成1天患者一小时发一次。由于压力值过大，retry导致time server接收到的请求一直增长，导致服务器崩溃，而且在时间同步这个服务的协议中，对应的厂商没有实现完整的SNTP，其中的go away机制没有被实现。
+
+##### Adaptive Timer
+
+每次都将RTT扩大150%，或者呈指数级增长。主要是要根据现在的情况动态的计算RTT和Timeout。
+
+```c
+rtt_avg = a*rtt_sample + (1-a)*rtt_avg; /* a = 1/8  */  
+dev = absolute(rtt_sample – rtt_avg); 
+rtt_dev = b*dev + (1-b)*rtt_dev;  /* b = 1/4  */  
+Timeout = rtt_avg + 4*rtt_dev
+
+```
 
 
+
+##### NAK (Negative AcKnowledgment)
+
+sender取消掉timer，receiver方承受更大的责任
+
+1. receiver 告诉sender他什么信息没有收到
+2. receiver可以对收到的信息进行计数
+
+（如果是真一个包都没收到，就肯定是丢包了，sender会自动重发的）
+
+总归就是得有一端来主动说，数据没了。
+
+#### Assurance of At-most-once Delivery
+At-least-once delivery：就是之前类似nonce的方式，倾向于发起第二次request
+
+At-most-once-delivery：在receiver设置table来记录nonce，但这个表会存在无限增长和永不删除的情况，也可以让这个application能够忍受两次返回。
+
+#### Assurance of Data Integrity
+sender：add checksum
+
+receiver：recalculates the checksum
+
+注意每一个层级的checksum都是有不同用途的，我们在Link Layer会存在说不相信网络传输吗，这里的checksum是不信任memory copying这个过程。
+
+#### Segments and Reassembly of Long Messages
+因为MTU的大小在有时候会比一个包小很多（1500），因此我们在发包的时候Link Layer会分包，我们在发的时候会附带信息(message id & segment id)。这个fragment的层级化就和我们FFS里面的fragment的出现是比较相像的。这个地方如果开始使用fragment的概念，就会存在fragment层级的管理，首先是我们可以乱序。
+
+这个地方会有说法是，我们如何从二层的丢帧走到四层的丢包，我们二层如果丢帧了，作为receiver，我们传到第四层就会不会返回ACK。
+
+如果out of order我们的解决方案：
+
+1. 仍旧按order进行收
+2. 我们对收到的fragment都写入buffer，这样会需要一个非常大的buffer
+3. 将上述两者进行组合
+
+#### TCP 四次挥手
+
+1. Alice sends close request to Bob with stream record ID
+
+2. Bob checks and agrees, sends a close ACK
+
+3. Alice receives ACK, turn off sender, discard record
+
+4. Alice sends "all done" to Bob
+
+5. Bob receives "all done" and discard stream record
+
+#### Assurance of Jitter Control
+对于电影或者视频，我们对于一些丢包是并不在意的，我们对于是否能及时看到比较在意，所以我们要保证delivery time，我们会对收到的segment都写入到buffer
+
+![jitter-control](./images/jitter-control.png)
+
+#### Assurance of Authenticity and Privacy
+ssl use public key encrypt message, which is an identify for reader
+
+private key in server can decrypt the message and then encrypt response
+
+response can be encrypt with public key by client
+
+#### End-to-end Performance
+trade off between complexity and performance
+
+如果我们按照之前segment进行发包，我们会发现这个性能就非常的慢，于是我们这个fragment发包的情况变成pipeline执行的方式。
+
+![pipeline-transmit](./images/pipeline-transmit.png)
+
+![package-window](./images/package-window.png)
+
+fix window => slide window
+
+#### Congestion Control
+
+Increase congestion window slowly
+
+If no drops -> no congestion yet
+
+If a drop occurs -> decrease congestion window quickly
+
+1. Slow start: one packet at first, then double until
+
+​      Sender reaches the window size suggested by the receiver 
+
+​      All the available data has been dispatched
+
+​      Sender detects that a packet it sent has been discarded
+
+2. Duplicate ACK
+
+When receiver gets an out-of-order packet, it sends back a duplicate of latest ACK
+
+3. Equilibrium
+
+​       Additive increase & multiplicative decrease
+
+4. Restart, after waiting a short time
+
+   
+
+AIMD
+
+![TCP-Retrofitting](./images/TCP-Retrofitting.png)
+
+![fairness](./images/fairness.png)
+
+我学不动了┭┮﹏┭┮
