@@ -988,7 +988,7 @@ Increase congestion window slowly
 
 If no drops -> no congestion yet
 
-If a drop occurs -> decrease congestion window quickly
+**If a drop occurs -> decrease congestion window quickly**
 
 1. Slow start: one packet at first, then double until
 
@@ -1008,7 +1008,20 @@ When receiver gets an out-of-order packet, it sends back a duplicate of latest A
 
 4. Restart, after waiting a short time
 
-   
+
+##### WindowSize的shedding
+
+为了性能：
+
+window size ≥ round-trip time × bottleneck data rate
+
+不等式右边其实就是规定了一个segment现在的最大大小，因为我们肯定是希望能够在一个RTT内就收到一次ACK，这样就能正常运行，那一个RTT内我们能收到的数据就是右式的大小，如果window size比这个值小，是一定能够保证在一个RTT内收到ACK的，所以我们为了提升性能，我们可以把window size 调得大些。
+
+为了解决拥堵：
+
+window size ≤ min(RTT x bottleneck data rate, Receiver buffer)
+
+正如上文所说，window size 变得比较小是为了减小同时发出去的包，尽可能的保证在包收到的情况下进行其他操作。
 
 AIMD
 
@@ -1017,3 +1030,4 @@ AIMD
 ![fairness](./images/fairness.png)
 
 我学不动了┭┮﹏┭┮
+
