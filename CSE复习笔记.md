@@ -24,10 +24,10 @@
 
 ##### context change
 
-`cd soft-link` and `cd .. ` will not change directory to  target file’s upper directory.
+`cd soft-link` and then `cd .. ` will not change directory to target file’s upper directory.
 
 
-如果你是新接入的设备，你将会在内存中农记录一个inode（并不代表你这个设备里面也是inode组织形式的file system）
+如果你是新接入的设备，你将会在内存中记录一个inode（并不代表你这个设备里面也是inode组织形式的file system）
 
 引入新的问题，如果我们想要在文件系统A里面做一个Link访问文件系统B的一个文件。实现这个功能的背景是：
 
@@ -51,7 +51,7 @@ symbolic link的实现方式就是创建一个新的inode类型是link，我们�
 
 #### Link
 
-需要在inode层级上添加refcnt进行计数，当refcnt变为0时，则正式删除文件，即去除掉的inode table中的记录。这个地方的link指hard link。每次unlink就是找到文件名对应的inode，然后通过inodetable找到具体的inode所在磁盘的offset，之后修改refcnt，并在该文件夹中消除该条entry。No Cycle for Link主要是类似于cpp中指针refcnt永远不会是0的情况。
+需要在inode层级上添加refcnt进行计数，当refcnt变为0时，则正式删除文件，即去除掉inode table中的记录。这个地方的link指hard link。每次unlink就是找到文件名对应的inode，然后通过inodetable找到具体的inode所在磁盘的offset，之后修改refcnt，并在该文件夹中消除该条entry。No Cycle for Link主要是类似于cpp中指针refcnt永远不会是0的情况。
 
 ##### renaming-1
 
@@ -160,7 +160,7 @@ FAT不支持soft link和hard link，其上也不支持权限控制，就非常�
 
 整个系统只有一个file_table，每个进程会有一个独立的fd_table，fd_table主要是记录map of fd to index of the file_table。
 
-每一个process 都有自己的fd name space，即fd_table是process的context在进程间切换的时候会被切换点，即如果在进程1中存在把fd=1 重定向到一个文件，切换到另一个继承进行cout，对应的文件并没有输入。
+每一个process 都有自己的fd name space，即fd_table是process的context在进程间切换的时候会被切换掉，即如果在进程1中存在把fd=1 重定向到一个文件，切换到另一个继承进行cout，对应的文件并没有输入（仍然会打印到标准输出）。
 
 ![file-cursor-and-fd](./images/file-cursor-and-fd.png)
 
@@ -198,7 +198,7 @@ atime对于ls第一次是可以的，第二次似乎在bash里面是有cache的�
 
 ![FS-shadow](./images/FS-shadow.png)
 
-#### Pooling & Interupt
+#### Polling & Interrupt
 
 Polling模式就是 OS 等待device做完操作之后再回到kernel态，这样浪费CPU太多的时间。
 
@@ -361,6 +361,8 @@ MTBF = MTTF + MTTR
 
 Availability 是用多少个9来表示
 
+MTTF 和 Availability 是相互正交的两个概念，可以 MTTF 很大而 Availability 很小，也可以 MTTF 很小而 Availability 很大。
+
 #### Redundancy
 
 ##### forward error correction(正向纠错)
@@ -391,7 +393,7 @@ replica的数量变得过大，也是没有效率的因为下式：
 
 ![replica-repair](./images/replica-repair.png)
 
-当replica恢复的时候，我们需要作出抉择来确定恢复到什么阶段，如果是1和7就不需要额外的操作，2、3恢复到old，5、6恢复到7，而5比较特殊，这里选择是恢复到7。
+当replica恢复的时候，我们需要作出抉择来确定恢复到什么阶段，如果是1和7就不需要额外的操作，2、3恢复到old，5、6恢复到7，而4比较特殊，这里选择是恢复到7。
 
 #### Durable Storage
 
@@ -572,7 +574,7 @@ File Handler 包含3个部分：
 
 ##### delete after open
 
-在之前的笔记中也提到，这样的情况发生在unix上是会让另一个进行读取老文件的。但是我们这边是使用了一个–Generation number来补足这个的inode描述性不足的问题，行为就是如果这个文件已经被删除了，你就不能再读了。
+在之前的笔记中也提到，这样的情况发生在unix上是会让另一个进程读取老文件的。但是我们这边是使用了一个–Generation number来补足这个的inode描述性不足的问题，行为就是如果这个文件已经被删除了，你就不能再读了。
 
 ##### NFS cache
 
@@ -646,7 +648,7 @@ client就相关元信息是与master进行交互，具体的信息交互是直�
 
 #### Fault Tolerance and Diagnosis
 
-- log下油管metadata所有的change
+- log下有关metadata所有的change
 - 周期性checkpoints
 - log和checkpoints被同步到replica
 
@@ -802,7 +804,7 @@ NAT是要按包来记录的，NAT这张表会非常频繁的进行变更，所�
 
 ##### Ethernet Mapping
 
-![IP-spec-HEADER](D:\杂七杂八课程\SE419\CSEReviewNote\images\IP-spec-HEADER.png)
+![IP-spec-HEADER](.\images\IP-spec-HEADER.png)
 
 注意这里已经到了Link Layer，我们这里的地址是48位的mac地址，而非IP地址。我们的IP地址是在data中的。我们的mac地址会被记录到交换机中
 
@@ -818,7 +820,7 @@ NAT是要按包来记录的，NAT这张表会非常频繁的进行变更，所�
 
 1. 发送端需要查看自己的ARP表，查看是否存在接收端的ARP表项。
 2. 如果找不到接收端的MAC地址，将以广播的方式发送一个ARP请求报文，其中带有发送端的IP地址，接收端收到相关的IP地址后与自己的IP地址进行比较，最终会返回自己的mac地址，让发送方进行登记。
-3. 如果接收端并不跟自己在同一个同一个网段中，则这个时候我们的路由器会主动站出来发送自己的MAC地址给发送端（ARP欺骗）
+3. 如果接收端并不跟自己在同一个网段中，则这个时候我们的路由器会主动站出来发送自己的MAC地址给发送端（ARP欺骗）
 
 ##### ARP欺骗攻击
 
