@@ -164,6 +164,10 @@ FAT不支持soft link和hard link，其上也不支持权限控制，就非常�
 
 ![file-cursor-and-fd](./images/file-cursor-and-fd.png)
 
+file cursor 共享：
+
+- 两个进程同时写会有影响，eg：写log，不会存在一个进程把另一个进程覆盖掉的情况。
+
 #### 有关于atime mtime ctime的实验
 
 Time stamps
@@ -210,6 +214,12 @@ Interrupt指 OS提交一个task，在task完成操作之后，device给OS发送�
 
 这个方面是和上一个优化是相互呼应的，上面的优化是OS层面的，本段的优化是针对device层面的，会存在在准备触发一次Interrupt的情况下，先等待一个指定时间，再打包整个interrupt回去。
 
+#### interrupt 和 exception 的区别
+
+- interrupt 可重复的，exception 不可重复
+- exception 一般是报错（例如除零）
+- interrupt 在流水线任何时候都可以发给硬件，而exception只能是在最后memory writeback的时候可以
+
 #### DMA
 
 Memory和Disk的交互原来需要CPU持续操作，占用CPU时间，现在出现一块硬件，可以让Memory和Disk的交互经过DMA，不需要占用CPU时间。
@@ -221,13 +231,19 @@ benefit：
 - 扩大总线支持long message的优势
 - 摊销bus在protocol的overhead
 
-#### Methods of Device Interaction
+#### Methods of Device Interaction（PIO & MMIO）
 - PIO 通过in & out的汇编指令让CPU跟device进行交互，只能在kernel mode被调用
 - Memroy-mapped I/O，使用LOAD & STORE，可以在用户态被使用，比如mmap的调用
 
 #### 关于memory
 
 出了cpu，所有的东西都是physical memory，我们原有的memory的physical memory被扩展到了system bus address（只是其中有一段是给了memory）
+
+#### 硬件的寄存器和Memory的区别
+
+- disk register里面的东西是可以被修改的，和Memory两者行为是不一样的。
+- cpu先访问的是disk cache，但是cache register可能缓存之后会被修改，disk register是最新的数据，所以对于这部分要 noncacheable （页表上有这个bit）
+- 两个地方要考虑：cpu（noncacheable）和编译器（volatile关键字）
 
 #### IDE Protocol
 
@@ -707,6 +723,12 @@ client就相关元信息是与master进行交互，具体的信息交互是直�
 
 主要的杠杆是，发送这个DNS解析请求的数据低于DNS的回复量，这样就能进行DDOS攻击。
 
+<img src="C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20191028134459361.png" alt="image-20191028134459361" />
+
+![image-20191028134421225](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20191028134421225.png)
+
+
+
 ### Packet Encapsulation
 
 ![layer-package](./images/layer-package.png)
@@ -776,7 +798,19 @@ structure packet
 
 以NetWork Layer为主视角，NETWORK_HANDLE是其中最为重要的。send数据写入相关信息，送出到LINK SEND。收到数据先找到下一跳到何方（找不到就直接丢包，或者是TTL到了就丢包，不然压力太大，这也是后面讲TCP处理堵塞的基础），更新header checksum（因为我们改了包头），如果重点并不在我，则寻找下一跳，向后运输，否则直接给到上层。
 
-##### NAT
+
+
+send : network_send->network_handle->link_send
+
+receive : link_receive->network_handle
+
+
+
+![image-20191028162539028](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20191028162539028.png)
+
+
+
+##### NAT(Network Address Translation)
 
 nat主要是建立vpc和公网之间的关系，主要解决的是IP不够用的难题。
 
@@ -817,6 +851,12 @@ NAT是要按包来记录的，NAT这张表会非常频繁的进行变更，所�
 1. 发送端需要查看自己的ARP表，查看是否存在接收端的ARP表项。
 2. 如果找不到接收端的MAC地址，将以广播的方式发送一个ARP请求报文，其中带有发送端的IP地址，接收端收到相关的IP地址后与自己的IP地址进行比较，最终会返回自己的mac地址，让发送方进行登记。
 3. 如果接收端并不跟自己在同一个同一个网段中，则这个时候我们的路由器会主动站出来发送自己的MAC地址给发送端（ARP欺骗）
+
+![image-20191028165817839](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20191028165817839.png)
+
+![image-20191028165830083](C:\Users\lenovo\AppData\Roaming\Typora\typora-user-images\image-20191028165830083.png)
+
+
 
 ##### ARP欺骗攻击
 
