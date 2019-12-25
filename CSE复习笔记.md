@@ -860,6 +860,8 @@ routing control只是为了跟上级结构routing进行区分，我们这里主�
 
 Path Vector的问题在于每一个新加入的node都需要自己的unique address，这和我们的VPC是有冲突的，其次我们的path vector的大小是与node数量正相关的。
 
+这个地方这个path vector的算法会运行非常多次直到网络稳定，一个新加的节点会逐渐被周围的节点所认识，一个节点离开网络的信息也会慢慢被传播到整个网络
+
 我们就需要进行Hierarchy，则出现了网段的概念，这让整个网络变得更加的复杂。
 
 ##### Border Gateway Protocol
@@ -923,6 +925,28 @@ sender取消掉timer，receiver方承受更大的责任
 （如果是真一个包都没收到，就肯定是丢包了，sender会自动重发的）
 
 总归就是得有一端来主动说，数据没了。
+
+对于收到的包是乱序的问题，我们解决的方式为：
+
+**Solution-1**: Receiver only ACK in order packets, discards others
+
+Waste of bandwidth
+
+**Solution-2**: ACK every packet and hold early packets in buffer, release the buffer when all in order
+
+Need using large buffer when waiting for a bad packet
+
+**Solution-3**: Combine the two above
+
+Discard if buffer is full
+
+New problem: how much buffer?
+
+**Speedup for common case**
+
+–NAK to avoid timeout
+
+–If NAKs are causing duplicates, stop NAKs
 
 #### Assurance of At-most-once Delivery
 At-least-once delivery：就是之前类似nonce的方式，倾向于发起第二次request
@@ -988,7 +1012,7 @@ Increase congestion window slowly
 
 If no drops -> no congestion yet
 
-If a drop occurs -> decrease congestion window quickly
+**If a drop occurs -> decrease congestion window quickly**
 
 1. Slow start: one packet at first, then double until
 
@@ -1008,7 +1032,20 @@ When receiver gets an out-of-order packet, it sends back a duplicate of latest A
 
 4. Restart, after waiting a short time
 
-   
+
+##### WindowSize的shedding
+
+为了性能：
+
+window size ≥ round-trip time × bottleneck data rate
+
+不等式右边其实就是规定了一个segment现在的最大大小，因为我们肯定是希望能够在一个RTT内就收到一次ACK，这样就能正常运行，那一个RTT内我们能收到的数据就是右式的大小，如果window size比这个值小，是一定能够保证在一个RTT内收到ACK的，所以我们为了提升性能，我们可以把window size 调得大些。
+
+为了解决拥堵：
+
+window size ≤ min(RTT x bottleneck data rate, Receiver buffer)
+
+正如上文所说，window size 变得比较小是为了减小同时发出去的包，尽可能的保证在包收到的情况下进行其他操作。
 
 AIMD
 
