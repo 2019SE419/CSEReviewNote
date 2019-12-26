@@ -5,14 +5,22 @@
 * P通常是一个事实
 * AP or CP 
 * C和A并不是0或1的选择
+
+### Abstractions of The Transaction
+
+![image-20191224223715404](./images/abstractions.png)
+
+
+
 ### All or nothing 
+
 Atomicity 
 #### Shadow copy 
 * 需要在每层软件和硬件都有一个commit point，如果中途crash还是会导致非原子操作的问题
 * 主要思想是only make one write to current/live copy of data
 * 对多个文件或文件夹的操作难以实现；仅仅是修改一小部分也需要拷贝整个文件；一次只能执行一个操作；无法在多核或多个磁盘上work
 #### Logging 
-* Operations:begin / write variable/ read variable/ commit/ abort 
+* Operations: begin / write variable/ read variable/ commit/ abort 
 * Performance:
   	* `write` is probably good because sequential writes and twice writes
   	* `read` is terrible because need to scan the log for every read
@@ -26,13 +34,13 @@ Improving `read`.`recovery` requires scanning the entire log.
 
 ![image-20191224223715404](./images/image-20191224223715404.png)
 
-Write-ahead-log protocol, thst is log the update before installing it.
+Write-ahead-log protocol, this is log the update before installing it.
 
 - Add cache for cell install:
 
 Improving `write` and `read`.Need a redo phase in addition to an undo phase in recovery.
 
-- Truncate the log(add checkpoint):
+- Truncate the log(add checkpoint):  (一对CKPT来确定一个完整的transaction)
 
 ![image-20191224232119039](./images/image-20191224232119039.png)
 
@@ -59,11 +67,17 @@ Eventually, we also want transaction-based systems to be **distributed**: to run
 
 ![image-20191225112350118](./images/image-20191225112350118.png)
 
+Conflict Graph 是 **有向图** .
+
 - View serializability
 
 ![image-20191225112817297](./images/image-20191225112817297.png)
 
 Final-state serializability $\supset$ View serializability $\supset$ Conflict serializability 
+
+Schedules that are view serializable but not conflict serializable involve **blind writes** : 
+
+> Blind writes: writes that are ultimately not read, which are not common in practice
 
 Basically: conflict serializability has practical benefits.
 
@@ -86,6 +100,8 @@ Problem: 2PL can result in deadlock.
 Solutions: global ordering on locks or take advantage of atomicity and abort one of the transactions.
 
 #### OCC(Optimistic Concurrency Control)
+
+**乐观并发控制**（又名“**乐观锁**”，Optimistic Concurrency Control，缩写“OCC”）是一种并发控制的方法。它假设多用户并发的事务在处理时不会彼此互相影响，各事务能够在不产生锁的情况下处理各自影响的那部分数据。在提交数据更新之前，每个事务会先检查在该事务读取数据后，有没有其他事务又修改了该数据。如果其他事务有更新的话，正在提交的事务会进行回滚。
 
 ![image-20191225132122834](./images/image-20191225132122834.png)
 
