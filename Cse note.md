@@ -130,14 +130,15 @@ Peterson’s algorithms rely on atomicity of load and store, which does not hold
 
 ### Memory consistency models
 
-- strict consistency
+- strict consistency ( A read gets the latest write value )
 - sequential consistency
+  - Sequential consistency is **weaker** than strict consistency. Allow "memory write lag". But require write propagate at the same time
   - cache coherence is a locally consistent view. E.g., for local variable x or y, all CPUs see the same order; but for (x,y), different CPUs may see different orders.
   - sequential consistency is a globally consistent view
 
 ![image-20191225141043930](./images/image-20191225141043930.png)
 
-- processor consistency
+- processor consistency ( consider the network latency )
   - Writes done by a single processor are received by all other processors in the issue order
   - But writes from different processors may be seen in a different order by different processors
 
@@ -145,7 +146,64 @@ Peterson’s algorithms rely on atomicity of load and store, which does not hold
 
 ### Atomic instructions
 
-TestAndSet, CompareAndSwap, LoadLinked+StoreConditional, FetchAndAdd
+- TestAndSet
+
+```c
+1 int TestAndSet(int *old_ptr, int new) {
+2     int old = *old_ptr; // fetch old value at old_ptr
+3     *old_ptr = new; // store 'new' into old_ptr
+4     return old; // return the old value
+5 }
+```
+
+
+
+- CompareAndSwap
+
+```c
+1 int CompareAndSwap(int *ptr, int expected, int new) {
+2     int actual = *ptr;
+3     if (actual == expected)
+4         *ptr = new;
+5     return actual;
+6 }
+
+```
+
+
+
+- LoadLinked+StoreConditional
+
+```c
+1 int LoadLinked(int *ptr) {
+2     return *ptr;
+3 }
+4
+5 int StoreConditional(int *ptr, int value) {
+6     if (no one has updated *ptr since the LoadLinked to this address) { 
+7         *ptr = value;
+8         return 1; // success!
+9     } else {
+10         return 0; // failed to update
+11    }
+12 }
+
+```
+
+
+
+- FetchAndAdd
+
+```c
+1 int FetchAndAdd(int *ptr) {
+2     int old = *ptr;
+3     *ptr = old + 1;
+4     return old;
+5 }
+
+```
+
+
 
 ### Lock performance
 
@@ -153,6 +211,33 @@ TestAndSet, CompareAndSwap, LoadLinked+StoreConditional, FetchAndAdd
 - fine-grained lock $\Rightarrow$ deadlock/livelock
   - pessimistically lock ordering
   - optimmistically backing out, setting timer expiration or cycle detection
+
+### Methods for Solving Deadlock
+
+- **Lock ordering (pessimistic)**
+  - Number the locks uniquely
+  - Require transactions acquire locks in order
+  - Problem: some app may not predict all of the locks they need before acquiring the first one
+- **Backing out (optimistic)**
+  - Allow acquire locks in any order
+  - If it encounters an already-acquired lock with an number lower than one it has previously acquired itself, then
+    - UNDO: Back up to release its higher-numbered locks
+    - Wait for the lower-numbered lock and REDO
+- **Timer expiration (optimistic)**
+  - Set a timer at begin_transaction, abort if timeout
+  - If still no progress, another one may abort
+  - Problem: how to chose the interval?
+- **Cycle detection (optimistic)**
+  - Maintain a wait-for-graph in the lock manager
+    - Shows owner and waiting ones
+    - Check when transaction tries to acquire a lock
+  - Prevent cycle (deadlock)
+    - Select some cycle member to be a victim 
+
+Livelock & Deadlock ( refer to 阿月 )
+
+Livelock：整天不做正事，导致正事永远做不完
+Deadlock：“你先把枪放下！”“你放我就放！”“你放我才放！”（无限套娃
 
 ## Thread and Condition Variable
 
