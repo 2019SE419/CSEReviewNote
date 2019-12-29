@@ -243,7 +243,39 @@ Deadlock：“你先把枪放下！”“你放我就放！”“你放我才放
 
 ![image-20191225151801078](./images/image-20191225151801078.png)
 
-### schedule 
+### yield
+
+![yield](./images/yield.png)
+
+### wait() & notify()
+
+wait()会调yield()
+
+Problem: one process receives notify() before falls in wait()
+
+Solution: 
+
+- New API: (将release、wait、acquire做成一个原子操作)
+  WAIT(cv, lock): release lock, yield CPU, wait to be notified（改调yield_wait()）
+  NOTIFY(cv): notify waiting threads of cv
+
+### yield_wait()
+
+> With Preemptive Scheduling
+
+![yield_wait_final](./images/yield_wait_final.png)
+
+### schedule (Code In Book)
+
+#### Thread Layer and Processor Layer
+
+- A thread runs in thread layer
+- A thread calls YIELD, enters processor layer
+- Saves the state of the running thread
+  - General purpose regs + PC + SP + CR3
+- Chose another runnable thread
+- Exit the processor layer and enter thread layer
+- The new thread runs in thread layer
 
 ![image-20191225152755860](./images/image-20191225152755860.png)
 
@@ -251,7 +283,11 @@ Deadlock：“你先把枪放下！”“你放我就放！”“你放我才放
 
 ![image-20191225152930118](./images/image-20191225152930118.png)
 
+![context_switch](./images/context_switch.png)
+
 When create a new thread, the stack of the thread must be initialized to include YIELD(), and push the return address to the middle of YIELD(),  so that when after return, the new thread will first release the lock, just as the previous slide. Then return again to the start_procedure (by pushing the address to the stack too).
+
+### Thread State Diagram
 
 ![image-20191225153342630](./images/image-20191225153342630.png)
 
@@ -259,10 +295,117 @@ When create a new thread, the stack of the thread must be initialized to include
 
 ### Two phase commit
 
+> Nodes agree that they are ready to commit before committing.
+
 - phase-1: preparation/voting
   - lower-layer transactions either aborts or tentatively committed
   - higher-layer transaction evaluates lower situation 
 - phase-2: commitment
   - if top-layer, then COMMIT or ABORT
   - if nested itself, then become tentatively committed 
+
+### Failures happened at server or coordinator
+
+#### Worker(Server) Failure During Commit 
+
+- If workers fail after the commit point
+  - We cannot abort the transaction
+  - Workers must be able to recover into a prepared state 
+  - Workers write PREPARE records to log once prepared \
+- The recovery process will:
+  - Read through the log, and
+  - Indicate which transactions are prepared but not committed 
+
+### Optimistic Replication
+
+- Use of Time in Computer Systems
+  - Synchronizing a clock over the internet: **NTP**. Query server's time, adjust local time accordingly
+  - What if a computer's clock is too fast?
+    - Idea: temporarily slow down or speed up the clock
+    - Typically cannot adjust oscillator (fixed hardware)
+    - Adjust oscillator frequency estimate, so counter advances faster / slower
+  - File Reconciliation with Timestamps ( Goal: No Lost Updates )
+- Vector Timestamps
+  - Store a vector of timestamps from each machine
+  - Entry in vector keeps track of the last mtime
+  - V1 is newer than V2 if all of V1's timestamps are >= V2’s
+  - V1 is older than V2 if all of V1's timestamps are <= V2’s
+  - Otherwise, V1 and V2 were modified concurrently, so conflict
+
+### Pessimistic replication ( RSM & Paxos )
+
+#### Handling Network Partitions
+
+Idea: require a majority servers to perform 
+
+#### Quorum ( 分布式系统 )
+
+- Define separate read &write quorums: Qr & Qw
+  - Qr + Qw > Nreplicas  (Why?)
+    - Confirm a write after writing to at least Qw of replicas
+    - Read at least Qr agree on the data or witness value
+- Example
+  - In favor of reading: Nreplicas = 5, Qw = 4, Qr = 2
+  - In favor or updating: Nreplicas = 5, Qw = 2, Qr = 4
+  - Enhance availability by Qw = Nreplicas & Qr = 1
+
+#### RSM ( Replicated State Machines )
+
+- A general approach to making consistent replicas of a server:
+
+  - Start with the **same initial state** on each server
+  - Provide each replica with the **same input** operations, in same order
+  - Ensure all operations are **deterministic**
+    - E.g., no randomness, no reading of current time, etc.
+
+- These rules ensure each server will end up in the **same final state** 
+
+- RSMs use a **primary-backup** mechanism for replication
+
+  - Using view server ensures that only one replica acts as the primary
+  - It can also recruit new backups after servers fail
+  - Primary很重要，决定order和一些不确定的值，相当于是leader
+  - Primary的操作需要backup的ACK
+
+- ADD **View-Server** 
+
+  - The view server keeps a table that maintains a sequence of "view"
+  - 同时指定谁是primary 和 backup，并告知client，但是它并不转发请求，还是由client发请求
+  - before S2( a backup server before ) knows it's primary, it will reject any requests from clients 
+
+- A few rules
+  1. Primary must wait for backup to accept each request    
+  2. Non-primary must reject direct coordinator requests
+  (That's what happened in the earlier failure, in the interim between the failure and S2 hearing that it was primary)
+  3. Primary must reject forwarded requests
+  (I.e., it won't accept an update from the backup)
+
+  4. Primary in view i must have been primary or backup in view i-1   
+
+#### Paxos
+
+**Client** : makes a request.
+
+**Proposer** : Get a request and run the protocol. Leader = elected Coordinator.
+
+**Acceptor** : Remember the state of the protocol. Quorum = any majority of Acceptors.
+
+**Learner** : When agreement has been reached, a Learner executes the request and/or sends a response back to the Client.
+
+- To make a change to the system
+  - Tell the proposer(leader) the event
+    	(NOTE: these requests may occur concurrently)	
+  - The leader picks its next highest ID and asks proposal to all the acceptors with that ID
+  - When the majority of acceptors accept the proposal, accepted event are sent to learners 
+  - The learners do event (e.g., update system state)
+
+#### The CAP Theorem
+
+It is impossible for a distributed computer system to simultaneously provide all three of the following guarantees
+
+- Consistency (all nodes see the same data at the same time)
+- Availability (a guarantee that every request receives a response about whether it succeeded or failed)
+- Partition tolerance (the system continues to operate despite arbitrary message loss or failure of part of the system)
+
+![cap](./images/cap.png)
 
