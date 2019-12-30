@@ -409,3 +409,147 @@ It is impossible for a distributed computer system to simultaneously provide all
 
 ![cap](./images/cap.png)
 
+### P2P Network
+
+> No Central Servers!
+
+#### BitTorrent
+
+- Usage Model: Cooperative
+  - User downloads file from someone using simple user interface
+  - While downloading, BitTorrent serves file also to others
+  - BitTorrent keeps running for a little while after download completes
+- 3 Roles
+  - Tracker: What peer serves which parts of a file ( It is a central component. )
+  - Seeder: Own the whole file
+  - Peer: Turn a seeder once has 100% of a file
+- DHT ( Distributed hash table )
+  - Interface: Provide an abstract interface to store and find data
+  
+  - Typical DHT interface:
+    put(key, value)
+    get(key) -> value
+    Loose guarantees about keeping data alive
+    
+  - Failures might cause incorrect lookup? ：
+    
+    Solution: successor lists. ( Successor List Length. Assume 1/2 of nodes fail. )
+  
+  
+
+### I/O Latency
+
+- With IDE bus: The electronics would be the bottleneck at 66 MB/S
+- With SATA-3 bus: The mechanics would be the bottleneck at 180 MB/S
+
+![cap](./images/latency.png)
+
+## Secure
+
+### TLS handshake
+
+![tls](./images/tls.png)
+
+
+
+### Microkernel
+
+![microkernel.png](./images/microkernel.png)
+
+- Pros
+  - Easier to develop services
+  - Fault isolation
+  - Customization
+  - Smaller kernel => easier to optimize
+- Cons
+  - Lots of boundary crossings
+  - Relatively poor performance
+
+## Virtualization
+
+### CPU virtualization
+
+> Enable each guest VM has its own kernel and user modes
+> Keep isolation between guest's kernel and user modes
+
+#### Problems of Trap & Emulate
+
+- Not all architectures are "strictly virtualizable" (X86)
+- An ISA is strictly virtualizable if, when executed in a lesser privileged mode:
+  - All instructions that access privileged state trap
+  - All instructions either trap or execute identically
+- Trap costs may be high
+
+#### There 17 such instructions in X86 ( behavior diff between user and kernel mode)
+
+SGDT, SIDT, SLDT, SMSW, PUSHF, POPF, LAR, LSL, VERR, VERW, POP, PUSH, CALL, JMP, INT n, RET, STR, MOV 
+
+#### How to Deal with the 17 Instructions?
+
+- Instruction Interpretation: emulate them by software
+  - Emulate Fetch/Decode/Execute pipeline in software ( Very slow! )
+- Binary translation: translate them to other instructions
+  - Translate before execution ( E.g., VMware, Qemu )
+- Para-virtualization: replace them in the source code
+  - Modify OS and let it cooperate with the VMM ( E.g., Xen hypervisor )
+- New hardware: change the CPU
+
+![cpuvir](./images/cpuvir.png)
+
+
+
+### Memory virtualization
+
+> Enable each guest VM has its own virtual MMU
+> Keep isolation between guest VMs
+
+![memvir](./images/memvir.png)
+
+#### shadow Paging
+
+![shadow](./images/shadow.png)
+
+
+
+- What if a Guest OS Modifies its Own Page Table?
+  - Solution :
+    VMM need to intercept when guest OS modifies page table, and update the shadow page table accordingly
+    Mark the guest table pages as read-only (in the shadow page table)
+    If guest OS tries to modify its page tables, it triggers page fault
+    VMM handles the page fault by updating shadow page table
+- What if a Guest App Access its Kernel Memory?
+  - One solution: split a shadow page table to two tables
+    Two shadow page tables, one for user, one for kernel
+    When guest OS switches to user mode, VMM will switch the shadow page table as well, vice versa
+    Recall trap & emulate
+
+#### Direct Paging (Para-virtualization)
+
+- Modify the guest OS
+  - No GPA is needed, just GVA and HPA
+  - Guest OS directly manages its HPA space
+  - Use hypercall to let the VMM update the page table
+  - The hardware CR3 will point to guest page table
+- VMM will check all the page table operations
+  - The guest page tables are read-only to the guest
+
+#### Hardware Supported Memory Virtualization
+
+Another table
+
+- EPT for translation from GPA to HPA
+  EPT is controlled by the hypervisor
+  EPT is per-VM
+
+![memhard](./images/memhard.png)
+
+
+
+### I/O virtualization
+
+> Enable each guest VM has its own virtual devices
+
+- I/O virtualization
+  - Sol-1: Device emulation
+  - Sol-2: Para-virtualization driver, e.g., virtio
+  - Sol-3: Hardware support, e.g., SR-IOV
